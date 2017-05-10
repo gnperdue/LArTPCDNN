@@ -1,6 +1,7 @@
 from DLTools.ModelWrapper import *
 
 from keras.layers.merge import concatenate
+from keras.layers.core import Flatten as flattener
 from keras.models import Sequential, Model
 from keras.layers.core import Dense, Activation
 from keras.layers import BatchNormalization, Dropout, Flatten, Input
@@ -63,11 +64,15 @@ class Model2DViewsTo3DDense(ModelWrapper):
         self.Model = Model(inputs=[input1, input2], outputs=modelT)
 
 
-
 class Model2DViewsTo3DConv(ModelWrapper):
-    def __init__(self, Name, View1Shape, View2Shape, width=0, depth=0, BatchSize=2048, N_Classes=0,
-                 init=0, BatchNormalization=False, Dropout=False, **kwargs):
-        super(Model2DViewsTo3DConv, self).__init__(Name, Loss="categorical_crossentropy", **kwargs)
+    def __init__(
+            self, Name, View1Shape, View2Shape, width=0, depth=0,
+            BatchSize=2048, N_Classes=0,  init=0, BatchNormalization=False,
+            Dropout=False, **kwargs
+    ):
+        super(Model2DViewsTo3DConv, self).__init__(
+            Name, Loss="categorical_crossentropy", **kwargs
+        )
 
         self.width = width
         self.depth = depth
@@ -94,25 +99,44 @@ class Model2DViewsTo3DConv(ModelWrapper):
         input1 = Input(self.input1_shape)
         input2 = Input(self.input2_shape)
 
-        x = Conv2D(64, (3, 3), strides=(1, 1), activation='relu', padding='same')(input1)
+        x = Conv2D(
+            64, (3, 3), strides=(1, 1), activation='relu', padding='same'
+        )(input1)
         x = MaxPooling2D((2, 2), padding='same')(x)
         x = Conv2D(32, (3, 3), activation='relu', padding='same')(x)
         x = MaxPooling2D((2, 2), padding='same')(x)
         x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
         encoded1 = MaxPooling2D((2, 2), padding='same')(x)
 
-        y = Conv2D(64, (3, 3), strides=(1, 1), activation='relu', padding='same')(input2)
+        y = Conv2D(
+            64, (3, 3), strides=(1, 1), activation='relu', padding='same'
+        )(input2)
         y = MaxPooling2D((2, 2), padding='same')(y)
         y = Conv2D(32, (3, 3), activation='relu', padding='same')(y)
         y = MaxPooling2D((2, 2), padding='same')(y)
         y = Conv2D(8, (3, 3), activation='relu', padding='same')(y)
         encoded2 = MaxPooling2D((2, 2), padding='same')(y)
 
+        # not sure how to do this in Keras...
+        # all the documentation I see goes like
+        #   model = Sequential()
+        #   model.add(input)
+        #   model.add(conv)
+        #   ...
+        #   model.add(Flatten())
+        #   ...
+        # But I can't see how to call `flatten(layer)` - I thought it would
+        # work like `concatenate([layers])`, basically, but it doesn't seem
+        # to.
+        flat_encoded1 = flattener(encoded1)
+        flat_encoded2 = flattener(encoded2)
         # concatenate images
-        #z = concatenate([encoded1, encoded2])
+        z = concatenate([flat_encoded1, flat_encoded2])
 
         # Now decode in 3D
-        z = Conv3D(8, (3, 3, 3), activation='relu', padding='same')(encoded1 + encoded2)
+        z = Conv3D(
+            8, (3, 3, 3), activation='relu', padding='same'
+        )(encoded1 + encoded2)
         z = UpSampling3D((2, 2, 2))(z)
         z = Conv3D(32, (3, 3, 3), activation='relu', padding='same')(z)
         z = UpSampling3D((2, 2, 2))(z)
